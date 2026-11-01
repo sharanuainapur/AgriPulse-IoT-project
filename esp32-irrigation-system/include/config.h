@@ -4,13 +4,13 @@
 
 // ESP32 DevKit V1 / ESP32-WROOM-32 pin configuration
 // Wi-Fi / MQTT credentials. Never commit real credentials to a public repository.
-static constexpr char WIFI_SSID[] = "ACT102692412405_5g";
-static constexpr char WIFI_PASSWORD[] = "10487366";
-static constexpr char MQTT_HOST[] = "puffin.rmq2.cloudamqp.com";
+static constexpr char WIFI_SSID[] = "<>";
+static constexpr char WIFI_PASSWORD[] = "<>";
+static constexpr char MQTT_HOST[] = "<>";
 static constexpr uint16_t MQTT_PORT = 1883;
-static constexpr char MQTT_USERNAME[] = "vypyazkf:vypyazkf";
-static constexpr char MQTT_PASSWORD[] = "MP0X2SZgC12DNPsb_O_vqM0RK9zJrxpH";
-static constexpr char MQTT_CLIENT_ID[] = "nano-esp32-irrigation-01";
+static constexpr char MQTT_USERNAME[] = "<>";
+static constexpr char MQTT_PASSWORD[] = "<>";
+static constexpr char MQTT_CLIENT_ID[] = "<>";
 
 static constexpr char MQTT_TELEMETRY_TOPIC[] = "agripulse/device-01/telemetry";
 static constexpr char MQTT_COMMAND_TOPIC[]   = "agripulse/device-01/command";
