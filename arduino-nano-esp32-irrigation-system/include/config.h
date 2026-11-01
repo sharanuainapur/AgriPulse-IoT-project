@@ -1,0 +1,48 @@
+#pragma once
+#include <Arduino.h>
+
+// Wi-Fi / MQTT credentials. Never commit real credentials to a public repository.
+static constexpr char WIFI_SSID[] = "ACT102692412405_5g";
+static constexpr char WIFI_PASSWORD[] = "10487366";
+static constexpr char MQTT_HOST[] = "puffin.rmq2.cloudamqp.com";
+static constexpr uint16_t MQTT_PORT = 1883;
+static constexpr char MQTT_USERNAME[] = "vypyazkf:vypyazkf";
+static constexpr char MQTT_PASSWORD[] = "MP0X2SZgC12DNPsb_O_vqM0RK9zJrxpH";
+static constexpr char MQTT_CLIENT_ID[] = "nano-esp32-irrigation-01";
+
+static constexpr char MQTT_TELEMETRY_TOPIC[] = "agripulse/device-01/telemetry";
+static constexpr char MQTT_COMMAND_TOPIC[]   = "agripulse/device-01/command";
+static constexpr char MQTT_STATUS_TOPIC[]    = "agripulse/device-01/status";
+static constexpr char MQTT_MOTOR_STATE_TOPIC[] = "agripulse/device-01/mstatus";
+
+// Arduino Nano ESP32 board pin labels. Verify wiring before powering the pump.
+static constexpr uint8_t SOIL_SENSOR_PIN = A0;    // Analog soil moisture sensor
+static constexpr uint8_t TEMPERATURE_PIN = 5;    // GPIO 5 // DS18B20 data, 4.7k pull-up to 3.3V
+static constexpr uint8_t FLOW_SENSOR_PIN = D3;    // GPIO 6 // Flow-meter pulse output
+static constexpr uint8_t PUMP_RELAY_PIN = 7;     // GPIO 7 // Relay/MOSFET driver input
+static constexpr uint8_t MOTOR_LED_PIN = D5;      // GPIO 8 // LED with series resistor
+static constexpr uint8_t POWER_LED_PIN = LED_BUILTIN;
+
+static constexpr bool PUMP_ACTIVE_LOW = false;       // true for active-low relay modules
+static constexpr bool MOTOR_LED_ACTIVE_LOW = false;
+
+// Sampling / network intervals
+static constexpr uint32_t SENSOR_SAMPLE_INTERVAL_MS = 1UL * 5UL * 1000UL;
+static constexpr uint32_t MQTT_PUBLISH_INTERVAL_MS = SENSOR_SAMPLE_INTERVAL_MS;
+static constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 10000UL;
+static constexpr uint32_t MQTT_RETRY_INTERVAL_MS = 5000UL;
+static constexpr uint32_t CONTROL_TASK_INTERVAL_MS = 100UL;
+static constexpr uint32_t STATUS_LOG_INTERVAL_MS = 10000UL;
+
+// Calibrate for your sensors. This assumes higher ADC = drier soil.
+static constexpr int SOIL_ADC_DRY = 1075;
+static constexpr int SOIL_ADC_WET = 50;
+static constexpr float FLOW_PULSES_PER_LITRE = 450.0f; // common YF-S201 starting estimate
+static constexpr float SOIL_DRY_THRESHOLD_PERCENT = 30.0f;
+static constexpr float SOIL_WET_STOP_PERCENT = 55.0f;
+
+// Pump protection
+static constexpr uint32_t FLOW_START_GRACE_MS = 10000UL;
+static constexpr uint32_t NO_FLOW_TIMEOUT_MS = 8000UL;
+static constexpr uint32_t MAX_CONTINUOUS_PUMP_MS = 30UL * 60UL * 1000UL;
+static constexpr uint16_t MQTT_BUFFER_SIZE = 512;

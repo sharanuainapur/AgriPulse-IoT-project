@@ -1,0 +1,12 @@
+{
+    "device_id": "device-01",
+    "mode": "AUTO",
+    "soil_moisture_pct": 100,
+    "temperature_c": 26.4375,
+    "water_flow_lpm": 0,
+    "total_litres": 15.99556,
+    "motor_state": "OFF",
+    "wifi_connected": true,
+    "mqtt_connected": true,
+    "recorded_at": 504717
+}
