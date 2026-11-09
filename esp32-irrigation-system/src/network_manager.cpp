@@ -6,6 +6,9 @@ static MqttMessageCallback userCommandCallback = nullptr;
 
 void NetworkManager::begin() {
     WiFi.mode(WIFI_STA);
+    // Modem sleep: the radio dozes between AP beacons while staying associated,
+    // so MQTT commands still arrive with only beacon-interval latency.
+    WiFi.setSleep(WIFI_PS_MIN_MODEM);
     mqttClient_.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient_.setBufferSize(MQTT_BUFFER_SIZE);
     mqttClient_.setKeepAlive(30);

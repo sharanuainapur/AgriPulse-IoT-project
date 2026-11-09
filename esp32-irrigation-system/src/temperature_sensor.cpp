@@ -12,18 +12,24 @@ static DallasTemperature dallas(&oneWire);
 
 void TemperatureSensor::begin() {
     dallas.begin();
-    // dallas.setWaitForConversion(true);
-    Serial.print("Temperature sensors found: ");
-    Serial.println(dallas.getDeviceCount());
-    logInfo("TempSensor", "Initialized for DS18B20");
+    // Don't let the library busy-poll the bus during conversion; readCelsius() sleeps instead.
+    dallas.setWaitForConversion(false);
+    const uint8_t count = dallas.getDeviceCount();
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Initialized for DS18B20; %u sensor(s) found", count);
+    if (count == 0)
+        logWarn("TempSensor", msg);
+    else
+        logInfo("TempSensor", msg);
 }
 bool TemperatureSensor::readCelsius(float& result) {
     dallas.requestTemperatures();
+    // delay() yields to FreeRTOS, so the CPU idles for the ~750 ms conversion.
+    delay(dallas.millisToWaitForConversion(dallas.getResolution()));
     int tempSensorCount = dallas.getDeviceCount();
     if (tempSensorCount == 0) {
+        logWarn("TempSensor", "No DS18B20 found on bus; rescanning");
         dallas.begin();
-        Serial.print("Temperature sensors found while reading: ");
-        Serial.println(tempSensorCount);
     }
     const float value = dallas.getTempCByIndex(0);
     if (value == DEVICE_DISCONNECTED_C || value < -55.0f || value > 125.0f) {

@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_system.h>
 #include "config.h"
 #include "app_state.h"
 #include "logger.h"
@@ -10,6 +11,7 @@
 #include "network_manager.h"
 #include "mqtt_commands.h"
 #include "telemetry.h"
+#include "oled_display.h"
 
 SharedState gState;
 static SoilSensor soilSensor;
@@ -17,12 +19,15 @@ static TemperatureSensor temperatureSensor;
 static FlowSensor flowSensor;
 static PumpController pump;
 static NetworkManager network;
+static OledDisplay display;
 
 static void publishSensorSnapshot();
 static void SensorTask(void *parameter);
 static void NetworkTask(void *parameter);
 static void ControlTask(void *parameter);
 static void StatusLogTask(void *parameter);
+static void DisplayTask(void *parameter);
+static void waitForStablePower();
 
 static const char *modeName(OperatingMode mode)
 {
@@ -259,36 +264,152 @@ static void StatusLogTask(void *)
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(STATUS_LOG_INTERVAL_MS));
     }
 }
+// Only the owner of the OLED after boot; setup() writes to it before this task exists.
+static void DisplayTask(void *)
+{
+    TickType_t lastWake = xTaskGetTickCount();
+    for (;;)
+    {
+        DisplayStatus status;
+        xSemaphoreTake(gState.mutex, portMAX_DELAY);
+        status.sensors = gState.sensors;
+        status.mode = gState.mode;
+        status.wifiConnected = gState.wifiConnected;
+        status.mqttConnected = gState.mqttConnected;
+        status.pumpOn = gState.pumpOn;
+        status.pumpFault = gState.pumpFault;
+        status.pumpStartedAtMs = gState.pumpStartedAtMs;
+        xSemaphoreGive(gState.mutex);
+        display.showDashboard(status);
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(OLED_REFRESH_INTERVAL_MS));
+    }
+}
+// Second OLED line during boot: warns the user when the last restart was abnormal.
+static const char *resetDisplayText(esp_reset_reason_t reason)
+{
+    switch (reason)
+    {
+    case ESP_RST_BROWNOUT:
+        return "!Last: power dip";
+    case ESP_RST_PANIC:
+        return "!Last: crash";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+        return "!Last: watchdog";
+    default:
+        return "Smart Irrigation";
+    }
+}
+static const char *resetReasonName(esp_reset_reason_t reason)
+{
+    switch (reason)
+    {
+    case ESP_RST_POWERON:
+        return "power-on";
+    case ESP_RST_BROWNOUT:
+        return "brownout (supply voltage dropped)";
+    case ESP_RST_SW:
+        return "software restart";
+    case ESP_RST_PANIC:
+        return "crash/panic";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+        return "watchdog";
+    case ESP_RST_EXT:
+        return "external reset pin";
+    case ESP_RST_DEEPSLEEP:
+        return "deep sleep wake";
+    default:
+        return "unknown";
+    }
+}
+
+// Hold all operations until power has been stable for POWER_SAFETY_TIMEOUT_MS.
+// A supply dip during this window triggers the ESP32 brownout detector, which
+// resets the chip, so the full window restarts from zero after every dip.
+static void waitForStablePower()
+{
+    char msg[96];
+    const esp_reset_reason_t reason = esp_reset_reason();
+    snprintf(msg, sizeof(msg), "Reset reason: %s", resetReasonName(reason));
+    if (reason == ESP_RST_BROWNOUT)
+        logWarn("Power", msg);
+    else
+        logInfo("Power", msg);
+    display.showLine(1, resetDisplayText(reason));
+    display.showLine(2, "Power check...");
+
+    const uint32_t windowSeconds = POWER_SAFETY_TIMEOUT_MS / 1000UL;
+    snprintf(msg, sizeof(msg), "Waiting for %lu s of stable power before starting sensors",
+             static_cast<unsigned long>(windowSeconds));
+    logInfo("Power", msg);
+
+    const uint32_t startMs = millis();
+    uint32_t lastReportMs = startMs;
+    uint32_t lastDisplayMs = 0;
+    while (millis() - startMs < POWER_SAFETY_TIMEOUT_MS)
+    {
+        if (lastDisplayMs == 0 || millis() - lastDisplayMs >= 1000UL)
+        {
+            lastDisplayMs = millis();
+            snprintf(msg, sizeof(msg), "Stable %2lu/%lu s",
+                     static_cast<unsigned long>((lastDisplayMs - startMs) / 1000UL),
+                     static_cast<unsigned long>(windowSeconds));
+            display.showLine(3, msg);
+        }
+        if (millis() - lastReportMs >= POWER_STABLE_LOG_INTERVAL_MS)
+        {
+            lastReportMs = millis();
+            snprintf(msg, sizeof(msg), "Power stable for %lu/%lu s",
+                     static_cast<unsigned long>((lastReportMs - startMs) / 1000UL),
+                     static_cast<unsigned long>(windowSeconds));
+            logInfo("Power", msg);
+        }
+        delay(100);
+    }
+    logInfo("Power", "Power stable; starting operations");
+}
+
 void setup()
 {
+    // Lower the CPU clock first; the APB bus stays at 80 MHz, so UART/ADC timing is unchanged.
+    setCpuFrequencyMhz(CPU_FREQUENCY_MHZ);
     loggerBegin();
-    logInfo("Boot", "Power stabilization started...");
-    delay(POWER_SAFETY_TIMEOUT_MS);
-    logInfo("Boot", "Power stabilization completed.");
-    logInfo("Boot", "Arduino Nano ESP32 irrigation system starting");
+    // Drive the relay to OFF before waiting, so the pump pin never floats.
+    pump.begin();
+    display.begin();
+    display.showMessage("   AgriPulse", "Smart Irrigation", "Starting...", "Pump: OFF (safe)");
+    waitForStablePower();
+    display.showMessage("   AgriPulse", "Power OK", "Init sensors...");
+    logInfo("Boot", "ESP32 DevKit irrigation system starting");
+    Serial.printf("[%10lu ms] [INFO ] [Boot     ] CPU frequency: %lu MHz\n",
+                  static_cast<unsigned long>(millis()), static_cast<unsigned long>(getCpuFrequencyMhz()));
     pinMode(POWER_LED_PIN, OUTPUT);
     digitalWrite(POWER_LED_PIN, HIGH);
     gState.mutex = xSemaphoreCreateMutex();
     if (!gState.mutex)
     {
         logError("Boot", "Failed to create state mutex; restarting");
+        display.showMessage("!! BOOT ERROR !!", "Out of memory", "Restarting...");
         delay(1000);
         ESP.restart();
     }
-    Serial.print("Sensors found: ");
     soilSensor.begin();
-    Serial.print("Sensors found: ");
     temperatureSensor.begin();
     flowSensor.begin();
-    pump.begin();
     network.setCommandCallback(handleMqttCommand);
     network.begin();
+    display.showMessage("   AgriPulse", "Sensors ready", "Connecting WiFi");
 
     logInfo("Boot", "Creating FreeRTOS tasks");
     xTaskCreatePinnedToCore(SensorTask, "SensorTask", 4096, nullptr, 2, nullptr, 1);
     xTaskCreatePinnedToCore(NetworkTask, "NetworkTask", 6144, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(ControlTask, "ControlTask", 4096, nullptr, 3, nullptr, 1);
     xTaskCreatePinnedToCore(StatusLogTask, "StatusLogTask", 4096, nullptr, 1, nullptr, 0);
+    if (display.available())
+        xTaskCreatePinnedToCore(DisplayTask, "DisplayTask", 4096, nullptr, 1, nullptr, 0);
     logInfo("Boot", "Startup complete");
 }
 void loop() { vTaskDelay(pdMS_TO_TICKS(1000)); }
