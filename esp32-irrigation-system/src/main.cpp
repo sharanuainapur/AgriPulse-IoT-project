@@ -105,6 +105,33 @@ static void SensorTask(void *)
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(1000));
     }
 }
+// Copies the network status into gState for the display and control tasks.
+// Runs on the network task, including from inside WiFiManager while it is
+// blocked joining a new network.
+static void publishNetworkState()
+{
+    const bool wifi = network.wifiConnected();
+    const bool mqtt = network.mqttConnected();
+    const String ssid = network.wifiSsid();
+    const String ip = wifi ? WiFi.localIP().toString() : String();
+    const int8_t rssi = wifi ? static_cast<int8_t>(WiFi.RSSI()) : 0;
+    const uint8_t clients = network.portalClientCount();
+    const int8_t mqttState = static_cast<int8_t>(network.mqttState());
+    xSemaphoreTake(gState.mutex, portMAX_DELAY);
+    gState.wifiConnected = wifi;
+    gState.mqttConnected = mqtt;
+    gState.wifiSetupStatus = network.wifiSetupStatus();
+    gState.portalReason = network.portalReason();
+    gState.wifiConnectStartedAtMs = network.connectStartedAtMs();
+    gState.wifiRssi = rssi;
+    gState.mqttState = mqttState;
+    gState.portalClients = clients;
+    snprintf(gState.wifiSsid, sizeof(gState.wifiSsid), "%s", ssid.c_str());
+    snprintf(gState.wifiPortalSsid, sizeof(gState.wifiPortalSsid), "%s", network.wifiPortalSsid());
+    snprintf(gState.wifiPendingSsid, sizeof(gState.wifiPendingSsid), "%s", network.pendingSsid());
+    snprintf(gState.wifiIp, sizeof(gState.wifiIp), "%s", ip.c_str());
+    xSemaphoreGive(gState.mutex);
+}
 static void NetworkTask(void *)
 {
     TickType_t lastWake = xTaskGetTickCount();
@@ -113,12 +140,9 @@ static void NetworkTask(void *)
     for (;;)
     {
         network.maintain();
+        publishNetworkState();
         const bool wifi = network.wifiConnected();
         const bool mqtt = network.mqttConnected();
-        xSemaphoreTake(gState.mutex, portMAX_DELAY);
-        gState.wifiConnected = wifi;
-        gState.mqttConnected = mqtt;
-        xSemaphoreGive(gState.mutex);
 
         if (wifi != previousWifi)
         {
@@ -276,6 +300,16 @@ static void DisplayTask(void *)
         status.mode = gState.mode;
         status.wifiConnected = gState.wifiConnected;
         status.mqttConnected = gState.mqttConnected;
+        status.wifiSetupStatus = gState.wifiSetupStatus;
+        status.portalReason = gState.portalReason;
+        status.wifiConnectStartedAtMs = gState.wifiConnectStartedAtMs;
+        status.wifiRssi = gState.wifiRssi;
+        status.mqttState = gState.mqttState;
+        status.portalClients = gState.portalClients;
+        snprintf(status.wifiSsid, sizeof(status.wifiSsid), "%s", gState.wifiSsid);
+        snprintf(status.wifiPortalSsid, sizeof(status.wifiPortalSsid), "%s", gState.wifiPortalSsid);
+        snprintf(status.wifiPendingSsid, sizeof(status.wifiPendingSsid), "%s", gState.wifiPendingSsid);
+        snprintf(status.wifiIp, sizeof(status.wifiIp), "%s", gState.wifiIp);
         status.pumpOn = gState.pumpOn;
         status.pumpFault = gState.pumpFault;
         status.pumpStartedAtMs = gState.pumpStartedAtMs;
@@ -400,12 +434,13 @@ void setup()
     temperatureSensor.begin();
     flowSensor.begin();
     network.setCommandCallback(handleMqttCommand);
+    network.setStatusListener(publishNetworkState);
     network.begin();
-    display.showMessage("   AgriPulse", "Sensors ready", "Connecting WiFi");
+    display.showMessage("   AgriPulse", "Sensors ready", "WiFi setup starting");
 
     logInfo("Boot", "Creating FreeRTOS tasks");
     xTaskCreatePinnedToCore(SensorTask, "SensorTask", 4096, nullptr, 2, nullptr, 1);
-    xTaskCreatePinnedToCore(NetworkTask, "NetworkTask", 6144, nullptr, 2, nullptr, 0);
+    xTaskCreatePinnedToCore(NetworkTask, "NetworkTask", 12288, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(ControlTask, "ControlTask", 4096, nullptr, 3, nullptr, 1);
     xTaskCreatePinnedToCore(StatusLogTask, "StatusLogTask", 4096, nullptr, 1, nullptr, 0);
     if (display.available())

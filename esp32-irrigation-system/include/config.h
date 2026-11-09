@@ -3,9 +3,10 @@
 #include <Arduino.h>
 
 // ESP32 DevKit V1 / ESP32-WROOM-32 pin configuration
-// Wi-Fi / MQTT credentials. Never commit real credentials to a public repository.
-static constexpr char WIFI_SSID[] = "ACT102692412405_5g";
-static constexpr char WIFI_PASSWORD[] = "10487366";
+// Wi-Fi is configured through the WiFiManager captive portal.
+static constexpr uint8_t WIFI_RESET_BUTTON_PIN = 0; // ESP32 DevKit BOOT button (active LOW)
+static constexpr uint32_t WIFI_RESET_HOLD_MS = 3000UL;
+static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000UL;
 static constexpr char MQTT_HOST[] = "puffin.rmq2.cloudamqp.com";
 static constexpr uint16_t MQTT_PORT = 1883;
 static constexpr char MQTT_USERNAME[] = "vypyazkf:vypyazkf";
@@ -43,13 +44,12 @@ static constexpr uint8_t OLED_SCL_PIN = 22;     // GPIO22 (default I2C SCL)
 static constexpr uint8_t OLED_I2C_ADDRESS = 0;
 static constexpr uint8_t OLED_WIDTH = 128;
 static constexpr uint8_t OLED_HEIGHT = 64;
-// Text layout: 4 lines of 21 characters (6x8 font), one line per 16 px band.
-// On yellow/blue modules the first line lands in the yellow header band.
-static constexpr uint8_t OLED_COLUMNS = OLED_WIDTH / 6;
-static constexpr uint8_t OLED_ROWS = 4;
+// UI layout: a 16 px status bar on top (the yellow band on yellow/blue modules)
+// and a 48 px content area below it.
 static constexpr uint8_t OLED_CONTRAST = 0x8F;  // 0-255; lower values save power and reduce burn-in
-static constexpr uint32_t OLED_REFRESH_INTERVAL_MS = 500UL;
-static constexpr uint32_t OLED_PAGE_INTERVAL_MS = 4000UL;
+static constexpr uint32_t OLED_REFRESH_INTERVAL_MS = 250UL;   // also drives the animations
+static constexpr uint32_t OLED_PAGE_INTERVAL_MS = 5000UL;     // dashboard page rotation
+static constexpr uint32_t OLED_CONNECTED_SPLASH_MS = 4000UL;  // "Wi-Fi connected" screen
 
 // Relay and LED logic
 static constexpr bool PUMP_ACTIVE_LOW = true;

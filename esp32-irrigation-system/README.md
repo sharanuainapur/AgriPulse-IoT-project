@@ -7,6 +7,8 @@ Modular PlatformIO starter project for the ESP32 DevKit (ESP32-WROOM-32) using A
 - FreeRTOS tasks for sensor sampling, network/MQTT, pump control, and status logging.
 - Sensor sample every 5 minutes (first sample is immediate).
 - MQTT telemetry and command subscription.
+- Wi-Fi provisioning through the WiFiManager captive portal, with no SSID/password compiled into firmware.
+- OLED setup instructions and connection status, plus a long-press Wi-Fi credential reset.
 - Local soil-based fallback when Wi-Fi or MQTT is unavailable.
 - Pump safety: stop and latch pump OFF when flow is not detected, and enforce a maximum continuous run time.
 - Timestamped serial logs at 115200 baud.
@@ -19,20 +21,18 @@ Modular PlatformIO starter project for the ESP32 DevKit (ESP32-WROOM-32) using A
 - Pump relay/driver input -> `GPIO26` (active-LOW by default, see `PUMP_ACTIVE_LOW`).
 - Motor status LED -> `GPIO25` through a suitable resistor.
 - Power LED -> `GPIO2` (onboard LED on many DevKit boards).
+- BOOT button -> `GPIO0` (onboard button; hold for 3 seconds to clear saved Wi-Fi and reopen setup).
 - 0.96" 128x64 I2C OLED (SSD1306) -> SDA `GPIO21`, SCL `GPIO22`, VCC 3.3V, GND. The I2C address (`0x3C` or `0x3D`) is auto-detected. Power the module from 3.3V so its on-board pull-ups keep SDA/SCL at ESP32-safe levels. The system runs normally without the OLED.
 - Use a proper relay/MOSFET driver and a separate appropriately rated power supply for the pump. **Never drive a pump directly from an ESP32 GPIO.** Add flyback protection for inductive DC loads where appropriate.
 
 Confirm pin labels and electrical limits for your exact ESP32 DevKit board before wiring.
 
 ## Configure
-Edit `include/config.h`:
-1. Set `WIFI_SSID` and `WIFI_PASSWORD`.
-2. Set `MQTT_HOST`, `MQTT_PORT`, and optional credentials.
-3. Set sensor and output pins if your wiring differs.
-4. If the OLED is not auto-detected, set `OLED_I2C_ADDRESS` to its scanned address (usually `0x3C` or `0x3D`). Lower `OLED_CONTRAST` to reduce power draw and burn-in.
-5. Calibrate `SOIL_ADC_DRY` and `SOIL_ADC_WET` from your sensor readings.
-6. Calibrate `FLOW_PULSES_PER_LITRE` for your flow sensor.
-7. Adjust watering thresholds and pump safety timeouts.
+On the first boot, the firmware clears any previously saved Wi-Fi credentials and opens a temporary `AgriPulse-XXXX` access point. Connect a phone or computer to that network, open `192.168.4.1`, choose any available Wi-Fi network, and save its password. The OLED displays each step and the live connection state. The setup access point is open and should only be used during nearby, physical setup.
+
+To change networks later, hold the ESP32 DevKit's **BOOT** button (GPIO0) for 3 seconds. The device clears its saved Wi-Fi credentials and reopens the setup portal. The board's **RESET/EN** button cannot be long-press detected by firmware; for a reset-time credential clear, hold BOOT while tapping RESET/EN, and keep BOOT held until setup mode appears.
+
+Edit `include/config.h` to set `MQTT_HOST`, `MQTT_PORT`, and optional MQTT credentials, adjust sensor/output pins, set `OLED_I2C_ADDRESS` if needed, calibrate `SOIL_ADC_DRY`, `SOIL_ADC_WET`, and `FLOW_PULSES_PER_LITRE`, and adjust watering thresholds and pump safety timeouts.
 
 Install PlatformIO, open this directory, then build/upload:
 ```bash
