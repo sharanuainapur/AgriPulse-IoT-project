@@ -288,6 +288,7 @@ static void StatusLogTask(void *)
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(STATUS_LOG_INTERVAL_MS));
     }
 }
+
 // Only the owner of the OLED after boot; setup() writes to it before this task exists.
 static void DisplayTask(void *)
 {

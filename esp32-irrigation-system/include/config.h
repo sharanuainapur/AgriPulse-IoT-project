@@ -13,10 +13,19 @@ static constexpr char MQTT_USERNAME[] = "vypyazkf:vypyazkf";
 static constexpr char MQTT_PASSWORD[] = "MP0X2SZgC12DNPsb_O_vqM0RK9zJrxpH";
 static constexpr char MQTT_CLIENT_ID[] = "nano-esp32-irrigation-01";
 
-static constexpr char MQTT_TELEMETRY_TOPIC[] = "agripulse/device-01/telemetry";
-static constexpr char MQTT_COMMAND_TOPIC[]   = "agripulse/device-01/command";
-static constexpr char MQTT_STATUS_TOPIC[]    = "agripulse/device-01/status";
-static constexpr char MQTT_MOTOR_STATE_TOPIC[] = "agripulse/device-01/mstatus";
+// Device identity. Change AGRIPULSE_DEVICE_ID only; topics are derived from it.
+#define AGRIPULSE_DEVICE_ID "01"
+#define AGRIPULSE_PROJECT_PREFIX "agripulse"
+static constexpr char DEVICE_ID[] = AGRIPULSE_DEVICE_ID;
+static constexpr char MQTT_PROJECT_PREFIX[] = AGRIPULSE_PROJECT_PREFIX;
+// Wi-Fi setup portal access point name, e.g. "agripulse-01" (max 32 chars).
+static constexpr char WIFI_PORTAL_SSID[] = AGRIPULSE_PROJECT_PREFIX "-" AGRIPULSE_DEVICE_ID;
+static_assert(sizeof(WIFI_PORTAL_SSID) - 1 <= 32, "WIFI_PORTAL_SSID must be at most 32 characters");
+
+static constexpr char MQTT_TELEMETRY_TOPIC[]   = AGRIPULSE_PROJECT_PREFIX "/" AGRIPULSE_DEVICE_ID "/telemetry";
+static constexpr char MQTT_COMMAND_TOPIC[]     = AGRIPULSE_PROJECT_PREFIX "/" AGRIPULSE_DEVICE_ID "/command";
+static constexpr char MQTT_STATUS_TOPIC[]      = AGRIPULSE_PROJECT_PREFIX "/" AGRIPULSE_DEVICE_ID "/status";
+static constexpr char MQTT_MOTOR_STATE_TOPIC[] = AGRIPULSE_PROJECT_PREFIX "/" AGRIPULSE_DEVICE_ID "/mstatus";
 
 // Analog soil moisture sensor
 static constexpr uint8_t SOIL_SENSOR_PIN = 34;  // GPIO34 (ADC1, input only)
@@ -68,7 +77,7 @@ static constexpr uint32_t STATUS_LOG_INTERVAL_MS = 10000UL;
 static constexpr uint32_t CPU_FREQUENCY_MHZ = 80;
 
 // Device protection
-static constexpr uint32_t POWER_SAFETY_TIMEOUT_MS = 30000UL;
+static constexpr uint32_t POWER_SAFETY_TIMEOUT_MS = 15000UL;
 static constexpr uint32_t POWER_STABLE_LOG_INTERVAL_MS = 5000UL;
 
 // Calibrate for your sensors. This assumes higher ADC = drier soil.

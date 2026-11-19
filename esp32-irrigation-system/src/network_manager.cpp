@@ -18,8 +18,7 @@ void NetworkManager::begin() {
     mqttClient_.setCallback(NetworkManager::callbackThunk);
     pinMode(WIFI_RESET_BUTTON_PIN, INPUT_PULLUP);
 
-    snprintf(wifiPortalSsid_, sizeof(wifiPortalSsid_), "AgriPulse-%04X",
-             static_cast<unsigned int>(ESP.getEfuseMac() & 0xFFFF));
+    snprintf(wifiPortalSsid_, sizeof(wifiPortalSsid_), "%s", WIFI_PORTAL_SSID);
     wifiManager_.setConfigPortalBlocking(false);
     wifiManager_.setConfigPortalTimeout(0);
     wifiManager_.setConnectTimeout(WIFI_CONNECT_TIMEOUT_MS / 1000UL);
@@ -61,6 +60,14 @@ void NetworkManager::setCommandCallback(MqttMessageCallback callback) {
     userCommandCallback = callback;
 }
 void NetworkManager::callbackThunk(char* topic, byte* payload, unsigned int length) {
+    if (topic == nullptr) {
+        logWarn("MQTT", "Rejected message with null topic");
+        return;
+    }
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Message received on \"%s\" (%u bytes)", topic, length);
+    logInfo("MQTT", msg);
+    // Topic / device ID validation is done in handleMqttCommand().
     if (userCommandCallback) userCommandCallback(topic, payload, length);
 }
 bool NetworkManager::wifiConnected() const { return WiFi.status() == WL_CONNECTED; }
