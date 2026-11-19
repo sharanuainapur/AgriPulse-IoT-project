@@ -14,6 +14,9 @@ class MongoManager:
         await self.client.admin.command("ping")
         self.database = self.client[self._settings.mongodb_database]
         await self.database.devices.create_index([("client_id", ASCENDING), ("device_id", ASCENDING)], unique=True)
+        await self.database.calibration.create_index(
+            [("client_id", ASCENDING), ("device_id", ASCENDING), ("calibration", ASCENDING)], unique=True
+        )
         await self.database.telemetry.create_index(
             [("client_id", ASCENDING), ("device_id", ASCENDING), ("recorded_at", DESCENDING), ("_id", DESCENDING)]
         )

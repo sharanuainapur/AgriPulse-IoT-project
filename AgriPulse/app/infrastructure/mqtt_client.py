@@ -9,7 +9,11 @@ from paho.mqtt.enums import CallbackAPIVersion
 
 from app.core.config import Settings
 from app.schemas.telemetry import TelemetryPayload
-from app.utils.mqtt_topics import parse_device_topic
+from app.utils.mqtt_topics import (
+    calibration_subscription_topics,
+    parse_calibration_topic,
+    parse_device_topic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,7 @@ class MqttService:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._telemetry_handler: Callable | None = None
         self._device_handler: Callable | None = None
+        self._calibration_handler: Callable | None = None
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
@@ -47,6 +52,10 @@ class MqttService:
 
     def set_device_state_handler(self, handler: Callable) -> None:
         self._device_handler = handler
+
+    def set_calibration_handler(self, handler: Callable) -> None:
+        """handler(client_id, device_id, calibration, action, payload: dict) coroutine."""
+        self._calibration_handler = handler
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -84,6 +93,8 @@ class MqttService:
             # client.subscribe(f"{self._settings.mqtt_topic_prefix}/+/+/state", qos=self._settings.mqtt_qos)
             client.subscribe(f"{self._settings.mqtt_topic_prefix}/+/telemetry", qos=self._settings.mqtt_qos)
             client.subscribe(f"{self._settings.mqtt_topic_prefix}/+/state", qos=self._settings.mqtt_qos)
+            for topic in calibration_subscription_topics(self._settings.mqtt_topic_prefix):
+                client.subscribe(topic, qos=self._settings.mqtt_qos)
         else:
             logger.error("MQTT connection rejected: %s", reason_code)
 
@@ -92,6 +103,11 @@ class MqttService:
         logger.warning("MQTT disconnected: %s", reason_code)
 
     def _on_message(self, client, userdata, message):
+        calibration_topic = parse_calibration_topic(message.topic, self._settings.mqtt_topic_prefix)
+        if calibration_topic is not None:
+            self._dispatch_calibration(calibration_topic, message)
+            return
+
         if not self._loop or not self._telemetry_handler:
             return
 
@@ -123,6 +139,35 @@ class MqttService:
                 "Ignoring invalid MQTT message on topic %s",
                 message.topic
             )
+
+    def _dispatch_calibration(self, parsed: dict[str, str], message) -> None:
+        if not self._loop or not self._calibration_handler:
+            return
+        try:
+            raw = message.payload.decode("utf-8").strip()
+            payload = json.loads(raw) if raw else {}
+            if not isinstance(payload, dict):
+                raise ValueError("Calibration payload must be a JSON object")
+        except Exception:
+            logger.exception("Ignoring invalid calibration MQTT message on topic %s", message.topic)
+            return
+
+        future = asyncio.run_coroutine_threadsafe(
+            self._calibration_handler(
+                parsed["client_id"], parsed["device_id"], parsed["calibration"], parsed["action"], payload
+            ),
+            self._loop,
+        )
+        topic = message.topic
+
+        def _log_failure(f) -> None:
+            if f.cancelled():
+                return
+            exc = f.exception()
+            if exc is not None:
+                logger.error("Calibration handler failed for topic %s", topic, exc_info=exc)
+
+        future.add_done_callback(_log_failure)
 
     async def subscribe_device(self, client_id: str, device_id: str) -> None:
         for kind in ("telemetry", "state"):

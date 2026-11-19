@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.infrastructure.mongo import MongoManager
 from app.infrastructure.redis_client import RedisManager
 from app.infrastructure.mqtt_client import MqttService
+from app.repositories.calibration_repository import CalibrationRepository
 from app.repositories.clients_repository import ClientsRepository
 from app.repositories.device_repository import DeviceRepository
 from app.repositories.telemetry_repository import TelemetryRepository
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
         app.state.device_repository = DeviceRepository(mongo.database)
         app.state.telemetry_repository = TelemetryRepository(mongo.database)
         app.state.clients_repository = ClientsRepository(mongo.database)
+        app.state.calibration_repository = CalibrationRepository(mongo.database)
         app.state.loop = asyncio.get_running_loop()
 
         from app.services.telemetry_service import TelemetryService
@@ -59,8 +61,15 @@ async def lifespan(app: FastAPI):
 
             await telemetryService._devices.upsert_device(device_id, state=motor_state)
 
+        from app.services.calibration_service import CalibrationService
+
+        async def handle_calibration(client_id, device_id, calibration, action, payload):
+            service = CalibrationService(app.state.calibration_repository, mqtt)
+            await service.handle_mqtt_message(client_id, device_id, calibration, action, payload)
+
         mqtt.set_telemetry_handler(handle_telemetry)
         mqtt.set_device_state_handler(handle_device)
+        mqtt.set_calibration_handler(handle_calibration)
         await mqtt.start()
         yield
     finally:

@@ -33,3 +33,6 @@ def get_clients_repository(request: Request):
 
 def get_telemetry_repository(request: Request):
     return request.app.state.telemetry_repository
+
+def get_calibration_repository(request: Request):
+    return request.app.state.calibration_repository
